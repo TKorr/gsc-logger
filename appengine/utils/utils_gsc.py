@@ -70,6 +70,21 @@ def list_sites():
     return data 
 
 
+def generate_filters(**kwargs):
+    """
+    Yields a filter list for each combination of the args provided.
+    """
+    kwargs = OrderedDict((k, v) for k, v in kwargs.items() if v)
+    dimensions = kwargs.keys()
+    values = list(kwargs.values())
+    for vals in itertools.product(*values):
+        yield [{
+            'dimension': dim,
+            'operator': 'equals',
+            'expression': val} for dim, val in zip(dimensions, vals)
+              ]
+
+
 #Main request to GSC
 # Credit: https://github.com/stephan765/Google-Search-Console-bulk-query/blob/master/search_console_query.py
 @rate_limit(400)
@@ -105,13 +120,15 @@ def execute_request(service, property_uri, request, max_retries=5, wait_interval
 
     return response
 
-# Given a site url string, loads all data for a particular date to BiqQuery
-def load_site_data(site):
-    
+# Given a site url, output a list of pages for a particular date
+def get_site_page_list(site):
+    service = get_gsc_service()
+
     data = None
     loaded = False
-    
-    query = cfg.GSC_QUERY
+    page_list = []
+
+    page_list_query = cgf.GSC_PAGES
 
     if db.last_date(site) == get_offset_date():
         #Already loaded
@@ -120,12 +137,8 @@ def load_site_data(site):
         
     query['startDate'] = get_offset_date()
     query['endDate'] = get_offset_date()
-        
-    
-    service = get_gsc_service()
-    
-    while True:
 
+    while True:
         data = execute_request(service, site, query)
         if data and 'rows' in data:
             rows = data['rows']
@@ -152,6 +165,61 @@ def load_site_data(site):
         
         else:
             break
+        
+    return loaded
+
+# Given a site url string, loads all data for a particular date to BiqQuery
+def load_site_data(site):
+    
+    service = get_gsc_service()
+
+    data = None
+    loaded = False
+    
+    query = cfg.GSC_QUERY
+
+    if db.last_date(site) == get_offset_date():
+        #Already loaded
+        log.info('Ignoring. Already run this day for site {0}.'.format(site))
+        return False
+        
+    query['startDate'] = get_offset_date()
+    query['endDate'] = get_offset_date()
+
+    for filter_set in generate_filters(page=[], device=['mobile', 'desktop', 'tablet'], country=['gbr']):
+        query['dimensionFilterGroups']['filters'] = filter_set
+        
+    
+    
+    
+        while True:
+
+            data = execute_request(service, site, query)
+            if data and 'rows' in data:
+                rows = data['rows']
+                numRows = len(rows)
+                rowsSent = 0
+                
+                try:
+                    result = bigq.stream_row_to_bigquery(site, rows)
+                    log.info('Added {0} rows to {1}'.format(numRows,site))
+                    rowsSent += numRows
+                    loaded = True
+                    
+                    if numRows == 5000:
+                        query['startRow'] = int(rowsSent + 1)
+                        continue
+                    else:
+                        if numRows and numRows > 0:
+                            db.add_entry(site, get_offset_date(),rowsSent)
+                        break
+                    
+                except HttpError as e:
+                    log.error("Stream to Bigquery Error. ", e.content)
+                    break
+            
+            else:
+                break
         
     return loaded
         

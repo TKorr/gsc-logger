@@ -42,16 +42,27 @@ ALLOW_OPEN_CRON = True
 HIDE_HOMEPAGE = False
 
 # Set Timezone ('US/Eastern', 'US/Central', 'US/Pacific')
-GSC_TIMEZONE = 'US/Eastern'
+GSC_TIMEZONE = 'GMT'
+
+GSC_PAGES = {
+                 "startDate": "2017-07-01",
+                 "endDate": "2017-07-31",
+                 "dimensions": [
+                  "page"
+                 ],
+                 "rowLimit": 5000,
+                 "startRow": 0
+                }
+
 
 # Base query for GSC.  startDate and endDate are replaced upon call.
 GSC_QUERY = {
                  "startDate": "2017-07-01",
                  "endDate": "2017-07-31",
                  "dimensions": [
-                  "query",
                   "date",
                   "page",
+                  "query",
                   "device"
                  ],
                  "dimensionFilterGroups": [
@@ -59,7 +70,8 @@ GSC_QUERY = {
                    "filters": [
                     {
                      "dimension": "country",
-                     "expression": "usa"
+                     "operator": "equals",
+                     "expression": "gbr"
                     }
                    ]
                   }
@@ -67,3 +79,15 @@ GSC_QUERY = {
                  "rowLimit": 5000
                 }
 
+GSC_QUERY_BY_PAGE = {
+                 "startDate": "2017-07-01",
+                 "endDate": "2017-07-31",
+                 "dimensions": ["query"],
+                 "dimensionFilterGroups": [
+                  {
+                    "groupType": "and",
+                    "filters": "filter_set"
+                  }
+                 ],
+                 "rowLimit": 5000
+                }
